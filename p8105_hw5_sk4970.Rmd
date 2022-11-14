@@ -86,10 +86,43 @@ for (i in 1:50) {
     unnest()
     
 # plot of CIs of each city
+mean_and_sd = function(x) {
+  
+  if (!is.numeric(x)) {
+    stop("Z scores only work for numbers")
+  }
+  
+  if (length(x) < 3) {
+    stop("Z scores really only work if you have three or more numbers")
+  }
+  
+  mean_x = mean(x)
+  sd_x = sd(x)
+  
+  tibble(
+    mean = mean_x,
+    sd = sd_x
+  )
+  
+}
+
+mean_and_sd(list_norm[[1]])
+mean_and_sd(list_norm[[2]])
+mean_and_sd(list_norm[[3]])
+mean_and_sd(list_norm[[4]])
+
+    output = vector("list", length = 4)
+
+for (i in 1:4) {
+  
+  output[[i]] = mean_and_sd(list_norm[[i]])
+
+}
+
+output
     
     geom_errorbar()
 ```
-      
   
       
 # Problem 3
@@ -97,4 +130,63 @@ for (i in 1:50) {
   norm_dist = tibble(
   x = rnorm(30, mean = 0, sd = 5)
   )
+
+sim_mean_sd = function(n_obs, mu = 0, sigma = 5) {
+  
+  x = rnorm(n = n_obs, mean = mu, sd = sigma)
+
+  tibble(
+    mu_hat = mean(x),
+    sigma_hat = sd(x)
+    )
+  
+}
+
+output = vector("list", length = 100)
+
+for (i in 1:100) {
+  
+  output[[i]] = sim_mean_sd(n_obs = 30)
+  
+}
+
+bind_rows(output) %>% 
+  view
+
+sim_results_df = 
+  expand_grid(
+    sample_size = 30,
+    iteration = 1:100
+  ) %>% 
+  mutate(
+    estimate_df = map(sample_size, sim_mean_sd)
+  ) %>% 
+  unnest(estimate_df)
+
+sim_results_df %>% 
+  ggplot(aes(x = mu_hat)) + 
+  geom_density()
+
+
+sim_results_df = 
+  expand_grid(
+    sample_size = 30,
+    true_sigma = 5,
+    true_mu = c(0, 1, 2, 3, 4, 5, 6),
+    iteration = 1:1000
+  ) %>% 
+  mutate(
+    estimate_df = 
+      map2(.x = sample_size, .y = true_sigma, ~sim_mean_sd(n_obs = .x, sigma = .y))
+  ) %>% 
+  unnest(estimate_df)
+
+sim_results_df %>% 
+  mutate(
+    sample_size = str_c("N = ", sample_size),
+    sample_size = fct_inorder(sample_size)
+  ) %>% 
+  ggplot(aes(x = sample_size, y = mu_hat)) + 
+  geom_violin() + 
+  facet_grid(. ~ true_sigma)
 ```
