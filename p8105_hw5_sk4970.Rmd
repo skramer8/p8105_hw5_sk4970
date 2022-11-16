@@ -11,6 +11,7 @@ library(ggplot2)
 library(ggridges)
 library(patchwork)
 library(rvest)
+library(virdis)
 
 knitr::opts_chunk$set(
 	echo = TRUE,
@@ -33,10 +34,45 @@ scale_fill_discrete = scale_fill_viridis_d
 
 # Problem 1
 ```{r}
-long_study = 
-  
+# Importing the date. I created a dataframe that includes the list of all files in that directory and the complete path to each file. Then I `map` over paths and import data using the `read_csv` function. Finally, I `unnest` the results. 
+
+long_study1 = 
+  tibble(
+    files = list.files("data/zip_data/"),
+    path = str_c("data/zip_data/", files)
+  ) %>% 
+  mutate(data = map(path, read_csv)) %>% 
+  unnest()
 ```
 
+The result of the previous code chunk isn't tidy -- data are wide rather than long, and some important variables are included as parts of others.
+
+```{r}
+# Tidying the dataset
+long_study2 = 
+  long_study1 %>% 
+  mutate(
+    files = str_replace(files, ".csv", ""),
+    group = str_sub(files, 1, 3)) %>% 
+  pivot_longer(
+    week_1:week_8,
+    names_to = "week",
+    values_to = "outcome",
+    names_prefix = "week_") %>% 
+  mutate(week = as.numeric(week)) %>% 
+  select(group, subj = files, week, outcome)
+```
+
+```{r}
+# Plot of individual data by group.
+long_study2 %>% 
+  ggplot(aes(x = week, y = outcome, group = subj, color = group)) + 
+  geom_point() + 
+  geom_path() + 
+  facet_grid(~group)
+```
+
+This plot suggests high within-subject correlation -- subjects who start above average end up above average, and those that start below average end up below average. Subjects in the control group generally don't change over time, but those in the experiment group increase their outcome in a roughly linear way. 
 
 # Problem 2
 ```{r}
@@ -44,24 +80,26 @@ long_study =
 homicide = read.csv("./data/problem_2/homicide-data.csv") %>%
   janitor::clean_names() 
 
-# There are 12 variables and 52,179 observations. Variables include report date, victim name (first, last), victim age, victim race, victim sex, multiple variables on location including latitude/longitude, and notes. 
+# There are 12 variables and 52,179 observations. Variables include report date, victim name (first, last), victim age, victim race, victim sex, multiple variables on location including latitude/longitude, and notes. I noticed a possible error in an observation with one city/state. It was Tulsa, AL. I changed the AL state to OK as I assume that's what it was meant to be. See below. 
+
+# fixing error in a city/state match up
+homicide %>%
+  mutate(state = if_else(city == "Tulsa" & state == "AL", "OK", state))
 
 # making city_state variable
 homicide$city_state <- paste(homicide$city, homicide$state, sep = ", ") 
 
 # creating homi_unsol disp=closed w/o arrest or open/no arrest and homi_total
 homicide %>%
-  mutate(homi_type = case_when(disposition == "Closed without arrest" ~ "unsolved", disposition == "Open/No arrest" ~ "unsolved", TRUE ~ "solved"))
-
-homi_total = 52179
+  homi_unsolved = case_when(disposition == "Closed without arrest" ~ "unsolved", disposition == "Open/No arrest" ~ "unsolved", TRUE ~ NULL) %>%
+  homi_total = 52179
 
 # prop test for Baltimore, MD
 balt_prop = 
-  homicide %>%
   filter(city_state = "Baltimore, MD") %>%
   prop.test(
-    x = balti_count %>% pull(homi_type = "unsolved"),
-    n = balti_count %>% pull(homi_total),
+    x = homicide %>% pull(homi_type = "unsolved"),
+    n = homicide %>% pull(homi_total),
     alternative = c("two.sided"),
     conf.level = 0.95, correct = TRUE) %>%
   broom::tidy()
@@ -80,7 +118,7 @@ for (i in 1:50) {
 
 }
 
-    prop_each_city = homicide_props %>%
+    prop_each_city =
   purrr::map2(homicide_props$unsolved, homicide_props$total_homicide, prop.test)
     
     unnest()
@@ -122,6 +160,17 @@ for (i in 1:4) {
 output
     
     geom_errorbar()
+  
+
+balt_test = 
+  homicide %>%
+  filter(city_state == "Baltimore, MD") %>%
+  mutate(p_test = map2(homi_unsolved, homi_total, ~prop.test(.x, .y) %>%
+    broom::tidy())) %>% 
+    unnest()
+
+balt_test %>%
+  select(city_state, estimate, "CI_lower" = conf.low, "CI_upper" = conf.high)
 ```
   
       
@@ -189,4 +238,25 @@ sim_results_df %>%
   ggplot(aes(x = sample_size, y = mu_hat)) + 
   geom_violin() + 
   facet_grid(. ~ true_sigma)
+
+sim_function = function(n = 30, mu, sigma = 5) {
+  sim_data = 
+    tibble(
+      x = rnorm(n, mean = mu, sd = sigma),)
+  
+  return(sim_data)
+}
+
+output = vector("list", length = 5000)
+
+for (i in 1:5000) {
+  output = bind_rows(output, sim_function(mu = 0))
+}
+
+t_test_mu0 = sim_results_mu0 %>%
+  mutate(
+    map(mu, t.test),
+    map(broom::tidy),
+    map(~select(.x, esimate, p.value))
+  )
 ```
