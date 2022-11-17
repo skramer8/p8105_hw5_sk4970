@@ -33,10 +33,10 @@ scale_fill_discrete = scale_fill_viridis_d
 ```
 
 # Problem 1
-```{r}
-# Importing the date. I created a dataframe that includes the list of all files in that directory and the complete path to each file. Then I `map` over paths and import data using the `read_csv` function. Finally, I `unnest` the results. 
+The code chunk below imports the data in individual spreadsheets contained in `./data/zip_data/`. To do this, I create a dataframe that includes the list of all files in that directory and the complete path to each file. As a next step, I `map` over paths and import data using the `read_csv` function. Finally, I `unnest` the result of `map`.
 
-long_study1 = 
+```{r}
+full_df = 
   tibble(
     files = list.files("data/zip_data/"),
     path = str_c("data/zip_data/", files)
@@ -45,12 +45,11 @@ long_study1 =
   unnest()
 ```
 
-The result of the previous code chunk isn't tidy -- data are wide rather than long, and some important variables are included as parts of others.
+The result of the previous code chunk isn't tidy -- data are wide rather than long, and some important variables are included as parts of others. The code chunk below tides the data using string manipulations on the file, converting from wide to long, and selecting relevant variables. 
 
 ```{r}
-# Tidying the data set
-long_study2 = 
-  long_study1 %>% 
+tidy_df = 
+  full_df %>% 
   mutate(
     files = str_replace(files, ".csv", ""),
     group = str_sub(files, 1, 3)) %>% 
@@ -63,9 +62,10 @@ long_study2 =
   select(group, subj = files, week, outcome)
 ```
 
+Finally, the code chunk below creates a plot showing individual data, faceted by group. 
+
 ```{r}
-# Plot of individual data by group.
-long_study2 %>% 
+tidy_df %>% 
   ggplot(aes(x = week, y = outcome, group = subj, color = group)) + 
   geom_point() + 
   geom_path() + 
@@ -73,6 +73,7 @@ long_study2 %>%
 ```
 
 This plot suggests high within-subject correlation -- subjects who start above average end up above average, and those that start below average end up below average. Subjects in the control group generally don't change over time, but those in the experiment group increase their outcome in a roughly linear way. 
+ 
 
 # Problem 2
 ```{r}
